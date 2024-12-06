@@ -3,9 +3,7 @@ import json
 
 
 class BotConfig:
-    FOLDER_PATH = 'cfg'
-    RANKS_FILENAME = 'botconfig.cfg'
-    FILE_PATH = FOLDER_PATH + '/' + RANKS_FILENAME
+    FILE_NAME = 'botconfig.cfg'
 
     CFG_DEFAULT_DICT = {
         "white_list_enabled": True,
@@ -38,23 +36,21 @@ class BotConfig:
 
     @classmethod
     def get(cls) -> dict:
-        if not os.path.exists(cls.FILE_PATH):
+        if not os.path.exists(cls.FILE_NAME):
             cls._init()
-        with open(cls.FILE_PATH, 'r') as cfg_file:
+        with open(cls.FILE_NAME, 'r') as cfg_file:
             cfg_dict = json.load(cfg_file)
         return cfg_dict
 
     @classmethod
     def write(cls, cfg_dict):
-        with open(cls.FILE_PATH, 'w', encoding='utf-8') as file:
+        with open(cls.FILE_NAME, 'w', encoding='utf-8') as file:
             json.dump(cfg_dict, file, indent=4, ensure_ascii=False)
 
     @classmethod
     def _init(cls):
-        if not os.path.exists(cls.FOLDER_PATH):
-            os.mkdir(cls.FOLDER_PATH)
-        if not os.path.exists(cls.FILE_PATH):
-            with open(cls.FILE_PATH, 'w', encoding='utf-8') as file:
+        if not os.path.exists(cls.FILE_NAME):
+            with open(cls.FILE_NAME, 'w', encoding='utf-8') as file:
                 json.dump(cls.CFG_DEFAULT_DICT, file, indent=4, ensure_ascii=False)
             cls.write(cfg_dict=cls.CFG_DEFAULT_DICT)
 
