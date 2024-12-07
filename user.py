@@ -274,6 +274,6 @@ if __name__ == '__main__':
     user.config.write(cfg)
     user.gpt_history.write(test_conv_hist * 100)
     new_stats = user.stats.load()
-    new_stats["today_tokens_spent"] = 1315
+    new_stats["today_tokens_spent"] = 13154
     user.stats.write(new_stats)
 
