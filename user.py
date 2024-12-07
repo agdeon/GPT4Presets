@@ -44,7 +44,7 @@ class User:
 
         # Внутренние классы
         self.config = self.Config(self)
-        self.history = self.History(self)
+        self.history = self.GptHistory(self)
         self.log = self.Log(self)
 
         self.folder_name = chat_id # возможно в будущем изменится
@@ -88,7 +88,7 @@ class User:
         self._create_user_cfg()
         self._create_user_log()
         self._create_user_history()
-        self._set_default_history()
+        self.history.reset()
 
     def remove(self):
         # cначала надо отвязать все handlers логгера
@@ -98,7 +98,7 @@ class User:
                 handler.close()
         folder_path = os.path.join(UserSettings.FOLDER_NAME, self.id)
         shutil.rmtree(folder_path)
-        cfg = self.get_cfg()
+        cfg = self.get_cfg() # ---------------- !!!!!!!!!!!!!!!!!???????????????
 
     # в формате массива [ {"role": "assistant", "content": reply}, ]
     def save_history(self, conv_history: list):
@@ -113,11 +113,6 @@ class User:
             return []
         with open(file_path, "r", encoding="utf-8") as json_file:
             return json.load(json_file)
-
-    def clear_history(self):
-        file_path = os.path.join(self._user_folder_path, UserSettings.HISTORY_FILENAME)
-        with open(file_path, 'w', encoding='utf-8') as json_file:
-            pass
 
     def debug(self, text):
         self._user_logger.debug(text)
@@ -150,6 +145,22 @@ class User:
     @staticmethod
     def _is_file_empty(path):
         return os.stat(path).st_size == 0
+
+    @staticmethod
+    def read_json_from_file(path) -> Union[dict, list]:
+        if not os.path.exists(path):
+            raise Exception(f"Файл {path} не найден!")
+        with open(path, 'r', encoding='utf-8') as file:
+            json_content = json.load(file)
+        return json_content
+
+    @staticmethod
+    def write_json_to_file(path, json_content: Union[dict, list]):
+        if not os.path.exists(path):
+            raise Exception(f"Файл {path} не найден!")
+        with open(path, 'w', encoding='utf-8') as file:
+            json.dump(json_content, file, indent=4, ensure_ascii=False)
+
 
     # ---------------------------
     # ПРИВАТНЫЕ МЕТОДЫ
@@ -197,32 +208,6 @@ class User:
         self._user_logger.addHandler(console_handler)
         self._user_logger.addHandler(file_handler)
 
-    def _manage_history_list(self, history_list) -> list:
-        history_list = copy.deepcopy(history_list)
-        if history_list[0]['role'] != 'system':
-            history_list.insert(0, self.__class__.DEFAULT_SYS_CONTENT)
-        user_rank = self.config.get()["rank"]
-        user_history_limit = int(BotConfig.get()["ranks"][user_rank]["history_messages_limit"])
-        print(f"history limit: {user_history_limit}")
-        while len(history_list) > user_history_limit and len(history_list) > 1:
-            history_list.pop(1)  # Удаляем второй элемент чтобы освободить место с конца но и оставить инструкцию (0)
-        return history_list
-
-    @staticmethod
-    def _read_json_from_file(path) -> Union[dict, list]:
-        if not os.path.exists(path):
-            raise Exception(f"Файл {path} не найден!")
-        with open(path, 'r', encoding='utf-8') as file:
-            json_content = json.load(file)
-        return json_content
-
-    @staticmethod
-    def _write_json_to_file(path, json_content: Union[dict, list]):
-        if not os.path.exists(path):
-            raise Exception(f"Файл {path} не найден!")
-        with open(path, 'w', encoding='utf-8') as file:
-            json.dump(json_content, file, indent=4, ensure_ascii=False)
-
     ############################################################
     # INNER CLASSES! #############################################
     class Log:
@@ -231,19 +216,29 @@ class User:
         def __init__(self, user_instance):
             self.user_instance = user_instance
 
-    class History:
+    class GptHistory:
         FILENAME = UserSettings.HISTORY_FILENAME
-        DEFAULT_PROMPT = {"role": "system", "content": ""}
+        DEFAULT_MSG = {"role": "system", "content": ""}
 
         def __init__(self, user_instance):
             self.user_instance = user_instance
+            self._filepath = os.path.join(UserSettings.FOLDER_NAME, self.user_instance.id, self.__class__.FILENAME)
 
         def get(self) -> list:
-            hist_list
-            return hist_list
+            return self.user_instance.read_json_from_file(self._filepath)
 
-        def write(self, history_list):
-            pass
+        def write(self, hist_list):
+            if hist_list[0]['role'] != 'system':
+                hist_list.insert(0, self.__class__.DEFAULT_MSG)
+            user_rank = self.user_instance.config.get()["rank"]
+            user_history_limit = int(BotConfig.get()["ranks"][user_rank]["history_messages_limit"])
+            while len(hist_list) > user_history_limit and len(hist_list) > 1:
+                hist_list.pop(1)  # Удаляем второй элемент чтобы освободить место с конца но и оставить инструкцию (0)
+            self.user_instance.write_json_to_file(self._filepath, hist_list)
+
+        def reset(self):
+            with open(self._filepath, 'w', encoding='utf-8') as json_file:
+                json.dump(self.__class__.DEFAULT_MSG, json_file, indent=4, ensure_ascii=False)
 
     class Config:
         FILENAME = UserSettings.CFG_FILENAME
@@ -275,10 +270,10 @@ class User:
             self._cfg_path = os.path.join(UserSettings.FOLDER_NAME, self.user_instance.id, self.__class__.FILENAME)
 
         def get(self) -> Union[dict, list]:
-            return User._read_json_from_file(self._cfg_path)
+            return self.user_instance.read_json_from_file(self._cfg_path)
 
         def write(self, cfg_dict: Union[dict, list]):
-            return User._write_json_to_file(self._cfg_path, cfg_dict)
+            return self.user_instance.write_json_to_file(self._cfg_path, cfg_dict)
 
 
 # для прямых тестов модуля
@@ -291,9 +286,8 @@ if __name__ == '__main__':
     user = User('41242')
     user.reset()
     cfg = user.config.get()
-    cfg["rank"] = Ranks.BASIC
+    cfg["rank"] = Ranks.VIP
     user.config.write(cfg)
-    user.save_history(test_conv_hist*100)
-    hst_len = len(user.get_history())
-    print(hst_len)
+    user.history.write(test_conv_hist*100)
+    print(user.history.get())
 
