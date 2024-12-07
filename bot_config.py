@@ -35,10 +35,10 @@ class BotConfig:
     }
 
     @classmethod
-    def get(cls) -> dict:
+    def load(cls) -> dict:
         if not os.path.exists(cls.FILE_NAME):
             cls._init()
-        with open(cls.FILE_NAME, 'r') as cfg_file:
+        with open(cls.FILE_NAME, 'r', encoding='utf-8') as cfg_file:
             cfg_dict = json.load(cfg_file)
         return cfg_dict
 
@@ -57,7 +57,7 @@ class BotConfig:
 
 # Пример использования
 if __name__ == '__main__':
-    cfg = BotConfig.get()
-    cfg["ranks"]["basic"]["daily_tokens_limit"] = 50000
+    cfg = BotConfig.load()
+    cfg["ranks"]["basic"]["daily_tokens_limit"] = 10000
     BotConfig.write(cfg)
 

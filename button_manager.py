@@ -68,7 +68,7 @@ class ButtonManager:
         self._user.info("_cfg_path = " + self._cfg_path)
         with open(self._cfg_path, 'r', encoding='utf-8') as file:
             cfg = json.load(file)
-        preset = cfg.get("active_preset", None)
+        preset = cfg.load("active_preset", None)
         self._user.info(f"preset = {preset}")
         if not preset:
             error_txt = "Ошибка в функции _ensure_active_preset: отсутсвуют пресеты пользователя"
@@ -79,10 +79,10 @@ class ButtonManager:
     def _ensure_active_preset(self):
         with open(self._cfg_path, 'r', encoding='utf-8') as file:
             cfg = json.load(file)
-        active_preset = cfg.get("active_preset", None)
+        active_preset = cfg.load("active_preset", None)
 
         if not active_preset:
-            default_preset = cfg.get("default_preset", None)
+            default_preset = cfg.load("default_preset", None)
             if not default_preset:
                 error_txt = "Ошибка в функции _ensure_active_preset: отсутсвуют пресеты пользователя"
                 self._user.error(error_txt)
