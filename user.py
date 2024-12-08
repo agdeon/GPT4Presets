@@ -26,11 +26,12 @@ class UserDefaults:
     Класс для настроек поведения класса User
     Обязателен к импорту наряду с ним
     """
-    FOLDER_NAME = "users"
+    USERS_FOLDER_NAME = "users"
     LOG_FILENAME = 'user.log'
-    HISTORY_FILENAME = 'gpt_history.json'
+    GPT_HISTORY_FILENAME = 'gpt_history.json'
     CFG_FILENAME = 'user.cfg'
     STAT_FILENAME = 'gpt_request_stats.json'
+    GPT_PRESETS_FILENAME = 'gpt_presets.json'
     LANGUAGE = 'ru'
     RANK = Ranks.BASIC
 
@@ -50,7 +51,7 @@ class User:
         self.id = chat_id
 
         self.folder_name = chat_id  # may change later
-        self._user_folder_path = os.path.join(UserDefaults.FOLDER_NAME, self.folder_name)
+        self._user_folder_path = os.path.join(UserDefaults.USERS_FOLDER_NAME, self.folder_name)
         self._create_users_folder()
         if self.is_new_user():
             self._create_user_folder()
@@ -60,6 +61,7 @@ class User:
         self.gpt_history = self.GptHistory(self)
         self.logger = self.Logger(self)
         self.stats = self.Stats(self)
+        self.gpt_presets = self.GptPresets(self)
 
     def set_gpt_prompt(self, prompt_text):
         hst = self.get_history()
@@ -84,13 +86,13 @@ class User:
         self.logger = self.Logger(self)
 
     def is_new_user(self):
-        user_path = os.path.join(UserDefaults.FOLDER_NAME, self.id)
+        user_path = os.path.join(UserDefaults.USERS_FOLDER_NAME, self.id)
         if not os.path.exists(user_path):
             return True
 
     @classmethod
     def _create_users_folder(cls):
-        main_folder = UserDefaults.FOLDER_NAME
+        main_folder = UserDefaults.USERS_FOLDER_NAME
         if not os.path.exists(main_folder):
             os.makedirs(main_folder)
 
@@ -118,7 +120,7 @@ class User:
 
         def __init__(self, user_instance):
             self.user_instance = user_instance
-            self._filepath = os.path.join(UserDefaults.FOLDER_NAME, self.user_instance.id, self.FILENAME)
+            self._filepath = os.path.join(UserDefaults.USERS_FOLDER_NAME, self.user_instance.id, self.FILENAME)
             self._init()
 
             self._logger = logging.getLogger('USER_' + self.user_instance.id)
@@ -161,13 +163,24 @@ class User:
             self._logger.addHandler(file_handler)
 
     class GptHistory:
-        FILENAME = UserDefaults.HISTORY_FILENAME
+        FILENAME = UserDefaults.GPT_HISTORY_FILENAME
         DEFAULT_MSG = {"role": "system", "content": ""}
 
         def __init__(self, user_instance):
+            self.is_enabled = False
             self.user_instance = user_instance
-            self._filepath = os.path.join(UserDefaults.FOLDER_NAME, self.user_instance.id, self.__class__.FILENAME)
+            self._filepath = os.path.join(UserDefaults.USERS_FOLDER_NAME, self.user_instance.id, self.__class__.FILENAME)
             self._init()
+
+        def enable(self):
+            cfg_json = self.user_instance.config.load()
+            cfg_json["gpt_history_enabled"] = True
+            self.user_instance.config.write(cfg_json)
+
+        def disable(self):
+            cfg_json = self.user_instance.config.load()
+            cfg_json["gpt_history_enabled"] = False
+            self.user_instance.config.write(cfg_json)
 
         def load(self) -> list:
             return self.user_instance.read_json_from_file(self._filepath)
@@ -190,21 +203,16 @@ class User:
         DEFAULT_VAL = {
             "id": None,
             "language": UserDefaults.LANGUAGE,
-            "rank": UserDefaults.RANK,
             "is_admin": False,
             "is_blocked": False,
-            "default_preset": {"Обычный чат GPT": ""},
-            "active_preset": {"Обычный чат GPT": ""},
-            "instruction_presests": {
-                "Обычный чат GPT": "",
-                "Лаконичный чат GPT": "Отвечай коротко и по делу. Без воды, минимум текста.",
-                "Точная статистика": "Твои ответы должны содержать подробную статистику и цифры. В удобном для понимания виде."
-            },
+            "gpt_history_enabled": False,
+            "gpt_active_preset": None,
+            "rank": UserDefaults.RANK,
         }
 
         def __init__(self, user_instance):
             self.user_instance = user_instance  # Сохраняем ссылку на User
-            self._filepath = os.path.join(UserDefaults.FOLDER_NAME, self.user_instance.id, self.__class__.FILENAME)
+            self._filepath = os.path.join(UserDefaults.USERS_FOLDER_NAME, self.user_instance.id, self.__class__.FILENAME)
             self._init()
 
         def load(self) -> Union[dict, list]:
@@ -232,7 +240,7 @@ class User:
 
         def __init__(self, user_instance):
             self.user_instance = user_instance  # Сохраняем ссылку на User
-            self._filepath = os.path.join(UserDefaults.FOLDER_NAME, self.user_instance.id, UserDefaults.STAT_FILENAME)
+            self._filepath = os.path.join(UserDefaults.USERS_FOLDER_NAME, self.user_instance.id, UserDefaults.STAT_FILENAME)
             self._init()
 
         def load(self) -> Union[dict, list]:
@@ -260,6 +268,53 @@ class User:
             today_date = int(str(datetime.now().date()).replace("-", ""))
             return today_date > last_req_date
 
+    class GptPresets:
+        FILENAME = UserDefaults.GPT_PRESETS_FILENAME
+        DEFAULT = {
+            "Обычный GPT4": "",
+            "Лаконичный чат GPT": "Отвечай коротко и по делу. Без воды, минимум текста.",
+            "Точная статистика": "Твои ответы должны содержать подробную статистику и цифры. В удобном для понимания виде."
+        }
+
+        def __init__(self, user_instance):
+            self.user_instance = user_instance  # Сохраняем ссылку на User
+            self._filepath = os.path.join(UserDefaults.USERS_FOLDER_NAME, self.user_instance.id, UserDefaults.GPT_PRESETS_FILENAME)
+            self._init()
+
+        def load(self) -> Union[dict, list]:
+            return self.user_instance.read_json_from_file(self._filepath)
+
+        def write(self, json_dict: Union[dict, list]):
+            return self.user_instance.write_json_to_file(self._filepath, json_dict)
+
+        def remove(self, preset_to_remove):
+            presets = self.load()
+            if len(presets.items()) == 0:
+                raise Exception("Попытка удалить пресет. Набор пресетов пустой.")
+            new_presets = dict()
+            for key, value in presets.items():
+                if key != preset_to_remove:
+                    new_presets[key] = value
+            self.write(new_presets)
+
+        def add(self, name, instruction):
+            presets = self.load()
+            presets[name] = instruction
+            self.write(presets)
+
+        def set_active(self, preset_name):
+            presets = self.load()
+            if preset_name not in presets:
+                raise Exception("Попытка назначить активным несуществующий пресет!")
+            cfg = self.user_instance.config.load()
+            cfg["gpt_active_preset"] = preset_name
+            self.user_instance.config.write(cfg)
+
+        def _init(self):
+            if not os.path.exists(self._filepath):
+                self.user_instance.write_json_to_file(self._filepath, self.__class__.DEFAULT)
+
+
 # For direct module tests
 if __name__ == '__main__':
     test_conv_hist = [
@@ -276,4 +331,6 @@ if __name__ == '__main__':
     new_stats = user.stats.load()
     new_stats["today_tokens_spent"] = 13154
     user.stats.write(new_stats)
-
+    # user.gpt_presets.remove("Точная статистика")
+    user.gpt_presets.add("На позитиве", "Добавляй побольше позитива и легких шуток в своих ответах.")
+    user.gpt_presets.set_active("На позитиве")
